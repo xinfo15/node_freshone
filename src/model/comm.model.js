@@ -5,7 +5,7 @@ const {
 const seq = require('../db/seq')
 
 const Comm = seq.define(
-  'tb_comm',
+  'tb_comment',
   {
     comment_id: {
       type: INTEGER,

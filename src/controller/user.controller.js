@@ -1,12 +1,11 @@
-const { findOneUser, updateOneUser } = require('../service/user.service')
-
-const { userRegisterError } = require('../constant/err.type')
-
+const { findOneUser, updateOneUser, userAttr } = require('../service/user.service')
 const { TOKEN_EXPIRE } = require('../config/config.default')
 const { error, success, MISSING_PARAM, COMMEN_ERROR } = require('../util/response')
 const { setToken } = require('../util/token')
 const User = require('../model/user.model')
 const { getTimeSec } = require('../util/date')
+const Follow = require('../model/follow.model')
+const { notDel } = require('../util/sql')
 
 class UserController {
   async login(ctx, next) {
@@ -53,9 +52,28 @@ class UserController {
     }
   }
 
-  async getFollowedUsers(rtx, next) {
+  async getFollowedUsers(ctx, next) {
     const { user_info } = ctx
-    
+    const { user_id } = user_info
+
+    try {
+      let followed_user_ids = await Follow.findAll({
+        where: notDel({ user_id }),
+        attributes: ['followed_user_id'],
+      })
+      followed_user_ids = followed_user_ids.map((item) => item.followed_user_id)
+
+      const followed_users = await User.findAll({
+        where: {
+          user_id: followed_user_ids,
+        },
+        attributes: userAttr(),
+      })
+
+      ctx.body = success(followed_users)
+    } catch (err) {
+      ctx.body = error(COMMEN_ERROR, '获取关注用户失败' + err)
+    }
   }
 }
 

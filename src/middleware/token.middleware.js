@@ -7,8 +7,11 @@ const { getTimeSec } = require('../util/date')
  */
 const verifyToken = async (ctx, next, isForceLogin) => {
   const token = ctx.request.header.authorization
+
   try {
-    const user_info = await hasToken(token)
+    let user_info = null
+
+    if (token) user_info = await hasToken(token)
 
     if (user_info && user_info.expire_time < getTimeSec()) {
       return (ctx.body = error(MISSING_TOKEN, '登录过期，请重新登录！'))
