@@ -13,10 +13,17 @@ const Upvote = require('../model/upvote.model')
 const Colle = require('../model/colle.model')
 const Reply = require('../model/reply.model')
 const Topic = require('../model/topic.model')
+const Ate = require('../model/ate.model')
+const TopicSelection = require('../model/topic_selection.model')
 
 const { findOneUser } = require('../service/user.service')
-const { findAllBlog, handleBlogRes } = require('../service/blog.service')
-const { BLOG_LIMIT, BLOG_TYPE } = require('../config/config.default')
+const { findAllBlog, handleBlogRes, handleCommRes } = require('../service/blog.service')
+const { BLOG_LIMIT, BLOG_TYPE, ARTICLE_TYPE } = require('../config/config.runtime')
+const { ACCESS_KEY_ID, ACCESS_KEY_SECERT, REGION, BUCKET, MY_DOMAIN } = require('../config/config.default')
+const OSS = require('ali-oss')
+const path = require('path')
+const { literal } = require('sequelize')
+const { resolve } = require('path')
 
 class BlogController {
   async getCategory(ctx, next, type = BLOG_TYPE) {
@@ -41,6 +48,21 @@ class BlogController {
       ctx.body = success(data)
     } catch (err) {
       ctx.body = error(COMMEN_ERROR, '获取category失败' + err)
+    }
+  }
+
+  async getReleaseBlogCate(ctx, next, type = BLOG_TYPE) {
+    try {
+      const cate_res = await Cate.findAll({
+        where: notDel({
+          type,
+        }),
+      })
+
+      ctx.body = success(cate_res)
+    } catch (err) {
+      console.log(err)
+      ctx.body = error(COMMEN_ERROR, '获取发布博客标签失败' + err)
     }
   }
 
@@ -132,54 +154,7 @@ class BlogController {
 
       const comm_res = await Comm.findAll(ops)
 
-      for (let comm_idx = 0; comm_idx < comm_res.length; comm_idx++) {
-        if (!comm_res[comm_idx]) continue
-
-        const comm_va = comm_res[comm_idx].dataValues
-
-        comm_va['user_info'] = await findOneUser({ user_id: comm_va['user_id'] })
-
-        comm_va['reps'] = await Reply.findAll({
-          where: notDel({
-            comment_id: comm_va['comment_id'],
-          }),
-          order: [['create_time', 'DESC']],
-          offset: 0,
-          limit: 2,
-        })
-        comm_va['is_mine'] = 0
-
-        if (user_id) {
-          comm_va['is_mine'] = comm_va['user_id'] == user_id ? 1 : 0
-        }
-        // 获取全部回复的条数
-        comm_va['rep_count'] = await Reply.count({
-          where: notDel({
-            comment_id: comm_va['comment_id'],
-          }),
-        })
-        const rep_res = comm_va['reps']
-
-        for (let rep_idx = 0; rep_idx < rep_res.length; rep_idx++) {
-          if (!rep_res[rep_idx]) return
-
-          const rep_va = rep_res[rep_idx].dataValues
-
-          rep_va['user_info'] = await findOneUser({ user_id: rep_va['user_id'] })
-
-          rep_va['is_mine'] = rep_va['user_id'] == user_id ? 1 : 0
-
-          if (rep_va['is_rereply']) {
-            rep_va['reply_user_info'] = await findOneUser({ user_id: rep_va['reply_user_id'] })
-
-            rep_va['reply_char_content'] = await Reply.findOne({
-              where: notDel({
-                reply_id: rep_va['parent_reply_id'],
-              }),
-            }).char_content
-          }
-        }
-      }
+      await handleCommRes(comm_res, user_id)
 
       ctx.body = success(comm_res)
     } catch (err) {
@@ -380,7 +355,7 @@ class BlogController {
   async toggleColle(ctx, next) {
     ctx.request.url = ctx.request.url.replace('/index/home/toggle_colle/', '')
     const Model = Colle
-    await baseController.toggleUpvote(ctx, next, Model)
+    await self.toggleUpvote(ctx, next, Model)
   }
 
   async removeBlog(ctx, next) {
@@ -469,6 +444,173 @@ class BlogController {
       ctx.body = error(COMMEN_ERROR, '删除回复失败' + err)
     }
   }
+
+  async getTheBlog(ctx, next, type = BLOG_TYPE) {
+    const query = phpUrlParams(ctx.request.url.replace('/index/home/get_the_blog/', ''))
+    const blog_id = parseInt(query.id)
+    const { user_info } = ctx
+    let user_id
+    if (user_info) user_id = user_info.user_id
+
+    try {
+      let blog_res = await Blog.findOne({
+        where: notDel({
+          blog_id,
+          type,
+        }),
+      })
+
+      if (!blog_res) return (ctx.body = error(COMMEN_ERROR, '博客或文章id不存在'))
+
+      blog_res = [blog_res]
+      await handleBlogRes(blog_res, user_id)
+      blog_res = blog_res[0]
+
+      const comm_res = (blog_res.commList = await Comm.findAll(
+        order({
+          where: notDel({
+            blog_id,
+          }),
+        })
+      ))
+
+      await handleCommRes(comm_res, user_id)
+
+      ctx.body = success([blog_res])
+    } catch (err) {
+      console.log(err)
+      ctx.body = error(COMMEN_ERROR, '获取当前博客失败')
+    }
+  }
+
+  async uploadOneBlogMedia(ctx, next) {
+    // let client = new OSS({
+    //   // yourRegion填写Bucket所在地域。以华东1（杭州）为例，Region填写为oss-cn-hangzhou。
+    //   region: REGION,
+    //   // 阿里云账号AccessKey拥有所有API的访问权限，风险很高。强烈建议您创建并使用RAM用户进行API访问或日常运维，请登录RAM控制台创建RAM用户。
+    //   accessKeyId: ACCESS_KEY_ID,
+    //   accessKeySecret: ACCESS_KEY_SECERT,
+    //   bucket: BUCKET,
+    //   // internal: true,
+    // })
+    // try {
+    //   // 填写OSS文件完整路径和本地文件的完整路径。OSS文件完整路径中不能包含Bucket名称。
+    //   // 如果本地文件的完整路径中未指定本地路径，则默认从示例程序所属项目对应本地路径中上传文件。
+    //   const result = await client.put('111.jpg', path.normalize('C:\\Users\\Administrator\\Desktop\\测试图片\\111.jpg'))
+    //   console.log(result)
+    // } catch (e) {
+    //   console.log(e)
+    // }
+    try {
+      const { pos } = ctx.request.body
+
+      const file = ctx.request.files.media
+
+      const type = file.type.split('/')[0]
+
+      const media_url = MY_DOMAIN + path.basename(file.path)
+
+      const data = {
+        url: media_url,
+        type,
+        pos,
+      }
+
+      ctx.body = success(data)
+    } catch (e) {
+      console.log(e)
+      ctx.body = error(COMMEN_ERROR, '上传文件失败' + e)
+    }
+  }
+
+  async addBlog(ctx, next) {
+    const { user_info } = ctx
+    let user_id = user_info.user_id
+    if (user_info['blog_count_limit'] == 0) {
+      return (ctx.body = error(COMMEN_ERROR, '你发布博客的次数以达到上线，请联系管理员解决'))
+    }
+    let { blog_content, category_id, ated_user_ids, topic_ids, upload_media_list } = ctx.request.body
+    const files = ctx.request.files
+    let imgs
+    if (files) imgs = files.imgs
+
+    ated_user_ids = ated_user_ids || []
+    topic_ids = topic_ids || []
+    imgs = imgs || null
+
+    if (!blog_content && !imgs && !upload_media_list) return (ctx.body = error(MISSING_PARAM, '缺少参数[blog_content | imgs | upload_media_list]'))
+
+    if (!category_id) return (ctx.body = error(MISSING_PARAM, '缺少参数category_id'))
+
+    // sdfsdfkojsdkf
+    // return json(ated_user_ids);
+
+    try {
+      const blog_res = await Blog.create({
+        user_id,
+        category_id,
+        char_content: blog_content,
+        type: BLOG_TYPE,
+      })
+
+      const blog_id = blog_res.blog_id
+
+      if (ated_user_ids.length) {
+        for (const ated_user_id of ated_user_ids) {
+          await Ate.create({
+            user_id,
+            blog_id,
+            ated_user_id,
+          })
+        }
+      }
+
+      if (topic_ids.length) {
+        for (const topic_id of topic_ids) {
+          await TopicSelection.create({
+            blog_id,
+            topic_id,
+          })
+        }
+      }
+
+      // upload_media_list 表示在前端上传过后的 url 地址
+      // imgs 表示 在后端 上传 文件
+      let upload_res = []
+      if (imgs || upload_media_list.length) {
+        if (imgs) {
+        } else if (upload_media_list.length) {
+          upload_res = upload_media_list
+        }
+
+        for (const upload_va of upload_res) {
+          const type = upload_va['type'] == 'video' ? 1 : 0
+
+          await Image.create({
+            blog_id,
+            image: upload_va['url'],
+            type,
+          })
+        }
+      }
+
+      await User.update(
+        {
+          blog_count_limit: literal('blog_count_limit-1'),
+        },
+        {
+          where: notDel({
+            user_id,
+          }),
+        }
+      )
+
+      ctx.body = success([], '发布博客成功！')
+    } catch (err) {
+      console.log(err)
+      ctx.body = error(COMMEN_ERROR, '发布博客失败' + err)
+    }
+  }
 }
-const baseController = new BlogController()
+const self = new BlogController()
 module.exports = new BlogController()

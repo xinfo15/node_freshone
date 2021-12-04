@@ -7,9 +7,11 @@ const parameter = require('koa-parameter')
 
 const errHandler = require('./errHandler')
 const router = require('../router')
+const cors = require('koa2-cors')
 
 const app = new Koa()
 
+// 请求体处理
 app.use(
   KoaBody({
     multipart: true,
@@ -22,9 +24,13 @@ app.use(
     parsedMethods: ['POST', 'PUT', 'PATCH', 'DELETE'],
   })
 )
+// 静态资源
 app.use(KoaStatic(path.join(__dirname, '../upload')))
 app.use(parameter(app))
 
+// 跨域
+app.use(cors())
+// 路由
 app.use(router.routes()).use(router.allowedMethods())
 
 // 统一的错误处理

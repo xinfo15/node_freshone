@@ -3,6 +3,7 @@ const {
 } = require('sequelize')
 
 const seq = require('../db/seq')
+const { relativeTime } = require('../util/sql')
 
 const Colle = seq.define(
   'tb_collection',
@@ -20,6 +21,11 @@ const Colle = seq.define(
     blog_id: {
       type: INTEGER,
       allowNull: false,
+    },    create_time: {
+      type: DATE,
+      get() {
+        return relativeTime(this.getDataValue('create_time'))
+      },
     },
     delete_time: {
       type: DATE,

@@ -17,12 +17,16 @@ const Topic = require('../model/topic.model')
 
 const { findOneUser } = require('../service/user.service')
 const { findAllBlog } = require('../service/blog.service')
-const { BLOG_LIMIT, ARTICLE_TYPE } = require('../config/config.default')
-const { getBlog, getCategory } = require('./blog.controller')
+const { BLOG_LIMIT, ARTICLE_TYPE } = require('../config/config.runtime')
+const { getBlog, getCategory, getTheBlog, getReleaseBlogCate } = require('./blog.controller')
 
 class ArticleController {
   async getArticleCategory(ctx, next) {
     await getCategory(ctx, next, ARTICLE_TYPE)
+  }
+
+  async getReleaseArtCate(ctx, next) {
+    await getReleaseBlogCate(ctx, next, ARTICLE_TYPE)
   }
 
   async getArticle(ctx, next) {
@@ -63,7 +67,7 @@ class ArticleController {
     try {
       const res = await Blog.create({
         user_id,
-        article_content,
+        char_content: article_content,
         category_id,
         main_describe,
         cover,
@@ -75,6 +79,11 @@ class ArticleController {
       console.log(err)
       ctx.body = error(COMMEN_ERROR, '发布文章失败' + err)
     }
+  }
+
+  async getTheArticle(ctx, next) {
+    ctx.request.url = ctx.request.url.replace('/index/home/get_the_article/', '')
+    await getTheBlog(ctx, next, ARTICLE_TYPE)
   }
 }
 

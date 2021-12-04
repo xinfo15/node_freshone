@@ -1,4 +1,5 @@
 const { Op } = require('sequelize')
+const Follow = require('../model/follow.model')
 const User = require('../model/user.model')
 const { notDel } = require('../util/sql')
 
@@ -36,16 +37,18 @@ class UserService {
 
   async handleFollowUsers(followed_user_ids, user_id) {
     const data = []
-    for (let { followed_user_id } of followed_user_ids) {
-      const followed_user_res = await findOneUser({ user_id: followed_user_id })
+    for (let followed_user_id of followed_user_ids) {
+      const followed_user_res = await self.findOneUser({ user_id: followed_user_id })
       if (!followed_user_id) continue
 
       followed_user_res['is_follow'] = 0
       followed_user_res['is_self'] = 0
       if (user_id) {
         followed_user_res['is_follow'] = await Follow.count({
-          user_id,
-          followed_user_id,
+          where: notDel({
+            user_id,
+            followed_user_id,
+          }),
         })
         followed_user_res['is_self'] = user_id == followed_user_id ? 1 : 0
       }
@@ -56,5 +59,5 @@ class UserService {
     return data
   }
 }
-
-module.exports = new UserService()
+const self = new UserService()
+module.exports = self

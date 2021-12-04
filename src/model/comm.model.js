@@ -1,5 +1,5 @@
 const {
-  DataTypes: { INTEGER, STRING, DATEONLY, DATE, BOOLEAN },
+  DataTypes: { INTEGER, STRING, DATEONLY, DATE, BOOLEAN, VIRTUAL },
 } = require('sequelize')
 
 const seq = require('../db/seq')

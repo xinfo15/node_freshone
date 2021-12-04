@@ -3,6 +3,7 @@ const {
 } = require('sequelize')
 
 const seq = require('../db/seq')
+const { relativeTime } = require('../util/sql')
 
 const Follow = seq.define(
   'tb_follow',
@@ -20,6 +21,11 @@ const Follow = seq.define(
     followed_user_id: {
       type: INTEGER,
       allowNull: false,
+    },    create_time: {
+      type: DATE,
+      get() {
+        return relativeTime(this.getDataValue('create_time'))
+      },
     },
     delete_time: {
       type: DATE,

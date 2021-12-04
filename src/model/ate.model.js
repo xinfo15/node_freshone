@@ -3,6 +3,7 @@ const {
 } = require('sequelize')
 
 const seq = require('../db/seq')
+const { relativeTime } = require('../util/sql')
 
 const Ate = seq.define(
   'tb_ate',
@@ -27,12 +28,17 @@ const Ate = seq.define(
     },
     ate_href: {
       type: INTEGER,
-      allowNull: false,
     },
     is_read: {
       type: BOOLEAN,
       allowNull: false,
       defaultValue: 0,
+    },
+    create_time: {
+      type: DATE,
+      get() {
+        return relativeTime(this.getDataValue('create_time'))
+      },
     },
     delete_time: {
       type: DATE,

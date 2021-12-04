@@ -16,7 +16,7 @@ const Topic = require('../model/topic.model')
 
 const { findOneUser, handleFollowUsers } = require('../service/user.service')
 const { findAllBlog, handleBlogRes } = require('../service/blog.service')
-const { BLOG_LIMIT, ARTICLE_TYPE, BLOG_TYPE } = require('../config/config.default')
+let { BLOG_LIMIT, ARTICLE_TYPE, BLOG_TYPE } = require('../config/config.runtime')
 
 class SpaceController {
   async getSpaceUinfo(ctx, next) {
@@ -75,10 +75,10 @@ class SpaceController {
 
   async getSpaceInfo(ctx, next) {
     const { user_info } = ctx
-    const query = phpUrlParams(ctx.request.url.replace('/index/home/toggle_upvote/', ''))
+    const query = phpUrlParams(ctx.request.url.replace('/index/home/get_space_info/', ''))
     const label_id = parseInt(query.label_id)
     //别人的空间用户id
-    let { space_user_id, page } = ctx.request.body
+    let { user_id: space_user_id, page } = ctx.request.body
     space_user_id = parseInt(space_user_id)
 
     if (!space_user_id) return (ctx.body = error(MISSING_PARAM, '缺少参数space_user_id'))
@@ -100,71 +100,53 @@ class SpaceController {
     let Model
     // 用于区分博客、文章
     let type
-    // if (label_id == 4) Model = Colle
-    // else if (label_id == 5) Model = Upvote
+    // 用于区分关注还是粉丝
+    let follow_where_column
+    let follow_column
+
     switch (label_id) {
       // 空间文章
       case -1:
-        try {
-          const blog_res = await findAllBlog({ user_id: space_user_id, type: ARTICLE_TYPE }, offset)
-
-          await handleBlogRes(blog_res, user_id)
-
-          ctx.body = success(blog_res)
-        } catch (err) {
-          console.log(err)
-          ctx.body = error(COMMEN_ERROR, '获取空间文章失败' + err)
-        }
-        break
+        type = ARTICLE_TYPE
       // 空间博客
       case 1:
+        type = type || BLOG_TYPE
         try {
-          const blog_res = await findAllBlog({ user_id: space_user_id, type: BLOG_TYPE }, offset)
+          const blog_res = await findAllBlog({ user_id: space_user_id, type }, offset)
 
           await handleBlogRes(blog_res, user_id)
 
           ctx.body = success(blog_res)
         } catch (err) {
           console.log(err)
-          ctx.body = error(COMMEN_ERROR, '获取空间博客失败' + err)
+          ctx.body = error(COMMEN_ERROR, '获取空间个人博客或文章失败' + err)
         }
         break
       // 空间关注
       case 2:
-        try {
-          const followed_user_ids = await Follow.findAll(
-            order({
-              where: notDel({
-                user_id: space_user_id,
-              }),
-              attribute: ['followed_user_id'],
-              offset,
-              limit: BLOG_LIMIT,
-            })
-          )
-
-          const data = await handleFollowUsers(followed_user_ids, user_id)
-          ctx.body = success(data)
-        } catch (err) {
-          console.log(err)
-          ctx.body = error(COMMEN_ERROR, '获取空间关注用户失败' + err)
-        }
-        break
+        // 查关注 要 user_id = space_user_id
+        follow_where_column = 'user_id'
+        follow_column = 'followed_user_id'
       // 空间粉丝
       case 3:
+        // 查粉丝 要 followed_user_id = space_user_id
+        follow_where_column = follow_where_column || 'followed_user_id'
+        follow_column = follow_column || 'user_id'
         try {
-          $fans_user_ids = await Follow.findAll(
+          let followed_user_ids = await Follow.findAll(
             order({
               where: notDel({
-                followed_user_id: space_user_id,
+                [follow_where_column]: space_user_id,
               }),
-              attribute: ['followed_user_id'],
+              attribute: [follow_column],
               offset,
               limit: BLOG_LIMIT,
             })
           )
+          followed_user_ids = mapColumns(followed_user_ids, follow_column)
 
-          const data = handleFollowUsers($fans_user_ids, user_id)
+          const data = await handleFollowUsers(followed_user_ids, user_id)
+
           ctx.body = success(data)
         } catch (err) {
           console.log(err)
@@ -178,22 +160,21 @@ class SpaceController {
       // 收藏的文章
       case 6:
         Model = Colle
-        type = type || ARTICLE_TYPE
+        type = type === undefined ? ARTICLE_TYPE : type
       // 点赞的博客
       case 5:
         Model = Model || Upvote
-        type = type || BLOG_TYPE
+        type = type === undefined ? BLOG_TYPE : type
       // 点赞的文章
       case 7:
         Model = Model || Upvote
-        type = type || ARTICLE_TYPE
+        type = type === undefined ? ARTICLE_TYPE : type
 
         try {
           let blog_ids = await Model.findAll(
             order({
               where: notDel({
                 user_id: space_user_id,
-                type,
               }),
               attribute: ['blog_id'],
               offset,
@@ -202,7 +183,7 @@ class SpaceController {
           )
           blog_ids = mapColumns(blog_ids, 'blog_id')
 
-          const blog_res = await findAllBlog({ blog_id: blog_ids }, offset)
+          const blog_res = await findAllBlog({ blog_id: blog_ids, type }, offset)
 
           await handleBlogRes(blog_res, user_id)
 
@@ -214,6 +195,42 @@ class SpaceController {
         break
       default:
         ctx.body = error(COMMEN_ERROR, '错误的label_id')
+    }
+  }
+
+  async toggleFollow(ctx, next) {
+    const { user_info } = ctx
+    const { user_id } = user_info
+
+    const { follow_user_id } = ctx.request.body
+    if (!follow_user_id) return (ctx.body = error(MISSING_PARAM, '缺少参数follow_user_id'))
+
+    try {
+      const follow_res = await Follow.findOne({
+        where: notDel({
+          user_id,
+          followed_user_id: follow_user_id,
+        }),
+      })
+      let is_follow
+      if (follow_res) {
+        await Follow.destroy({
+          where: { user_id, followed_user_id: follow_user_id },
+        })
+        is_follow = 0
+      } else {
+        await Follow.create({
+          user_id: user_id,
+          followed_user_id: follow_user_id,
+        })
+        is_follow = 1
+      }
+      const data = { is_follow: is_follow }
+
+      ctx.body = success(data)
+    } catch (err) {
+      console.log(err)
+      ctx.body = error(COMMEN_ERROR, '切换关注失败')
     }
   }
 }

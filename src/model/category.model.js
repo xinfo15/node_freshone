@@ -3,6 +3,7 @@ const {
 } = require('sequelize')
 
 const seq = require('../db/seq')
+const { relativeTime } = require('../util/sql')
 
 const Cate = seq.define(
   'tb_category',
@@ -25,6 +26,11 @@ const Cate = seq.define(
     name: {
       type: STRING,
       allowNull: false,
+    },    create_time: {
+      type: DATE,
+      get() {
+        return relativeTime(this.getDataValue('create_time'))
+      },
     },
     delete_time: {
       type: DATE,

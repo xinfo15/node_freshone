@@ -1,5 +1,5 @@
 const { findOneUser, updateOneUser, userAttr } = require('../service/user.service')
-const { TOKEN_EXPIRE } = require('../config/config.default')
+const { TOKEN_EXPIRE } = require('../config/config.runtime')
 const { error, success, MISSING_PARAM, COMMEN_ERROR } = require('../util/response')
 const { setToken } = require('../util/token')
 const User = require('../model/user.model')
