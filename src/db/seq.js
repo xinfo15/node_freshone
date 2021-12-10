@@ -11,6 +11,7 @@ const seq = new Sequelize(MYSQL_DB, MYSQL_USER, MYSQL_PWD, {
   define: {
     freezeTableName: true,
   },
+  // 设置为正常 数据库datetime格式
   dialectOptions: {
     dateStrings: true,
     typeCast: true,

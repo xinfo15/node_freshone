@@ -59,8 +59,8 @@ class ProfileController {
 
     if (!img) return (ctx.body = error(MISSING_PARAM, '缺少参数图片img'))
     const body = ctx.request.body
-    const { is_crop } = body
-    console.log(body)
+    let { is_crop } = body
+    is_crop = parseInt(is_crop)
 
     try {
       let crop_param = {}
@@ -77,7 +77,7 @@ class ProfileController {
         const { x, y, w, h } = crop_param
 
         const jimpReader = await jimp.read(img.path)
-        jimpReader.crop(x, y, w, h).write(img.path)
+        const res = jimpReader.crop(x, y, w, h).write(img.path)
       }
 
       const img_url = MY_DOMAIN + path.basename(img.path)

@@ -226,7 +226,7 @@ class MsgController {
 
       for (let comm_blog_idx = 0; comm_blog_idx < comm_blog_res.length; comm_blog_idx++) {
         let comm_blog_va = comm_blog_res[comm_blog_idx]
-        if (!comm_blog_va) continue
+        // if (!comm_blog_va) continue
         comm_blog_va = comm_blog_res[comm_blog_idx] = comm_blog_va.dataValues
 
         comm_blog_va['blog_info'] = blog_data[comm_blog_va['blog_id']]
@@ -243,7 +243,7 @@ class MsgController {
       for (let reply_idx = 0; reply_idx < reply_res.length; reply_idx++) {
         let reply_va = reply_res[reply_idx]
 
-        if (!reply_va) continue
+        // if (!reply_va) continue
 
         reply_va = reply_res[reply_idx] = reply_va.dataValues
 
@@ -254,11 +254,12 @@ class MsgController {
 
         reply_va['col_id'] = reply_va['reply_id']
         //回复的评论
-        if (reply_va['is_rereply'] == 0) {
+        if (reply_va['is_rereply'] === 0) {
           let replied_comm_res = await Comm.findOne({
-            comment_id: reply_va['comment_id'],
+            where: notDel({ comment_id: reply_va['comment_id'] }),
           })
           if (!replied_comm_res) continue
+
           replied_comm_res = replied_comm_res.dataValues
           replied_comm_res['user_info'] = await findOneUser({ user_id: replied_comm_res['user_id'] })
           if (!replied_comm_res['user_info']) continue
@@ -266,16 +267,17 @@ class MsgController {
           reply_va['replied_info'] = replied_comm_res
         } else {
           replied_reply_res = await Reply.findOne({
-            reply_id: reply_va['parent_reply_id'],
+            where: notDel({ reply_id: reply_va['parent_reply_id'] }),
           })
           if (!replied_reply_res) continue
           replied_reply_res = replied_reply_res.dataValues
+
           replied_reply_res['user_info'] = await findOneUser({ user_id: replied_reply_res['user_id'] })
           if (!replied_reply_res['user_info']) continue
 
           if (!replied_reply_res['is_rereply']) {
             const replied_reply_comm_res = await Comm.findOne({
-              comment_id: replied_reply_res['comment_id'],
+              where: notDel({ comment_id: replied_reply_res['comment_id'] }),
             })
             replied_reply_res['replied_user_info'] = await findOneUser({
               user_id: replied_reply_comm_res['user_id'],
@@ -350,6 +352,7 @@ class MsgController {
         if (!blog_data[upvote_va['blog_id']]) continue
         upvote_va['blog_info'] = blog_data[upvote_va['blog_id']]
         upvote_va['col_id'] = upvote_va['upvote_id']
+        upvote_va['create_time'] = relativeTime(upvote_va['create_time'])
       }
 
       ctx.body = success(upvote_res)
@@ -507,7 +510,6 @@ class MsgController {
       ctx.body = error(COMMEN_ERROR, '设置消息全部已读失败' + err)
     }
   }
-
 }
 
 module.exports = new MsgController()

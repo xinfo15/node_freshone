@@ -1,4 +1,4 @@
-const { notDel } = require('../util/sql')
+const { notDel, relativeTime } = require('../util/sql')
 const { success, error, COMMEN_ERROR, MISSING_PARAM, MISSING_TOKEN } = require('../util/response')
 const { phpUrlParams } = require('../util/request')
 
@@ -66,6 +66,7 @@ class BlogService {
           category_id: blog_va['category_id'],
         }),
       })
+      blog_va['create_time'] = relativeTime(blog_va['create_time'])
       blog_va['category_name'] = cate_res.name
       blog_va['commList'] = []
       blog_va['collapseComm'] = false
@@ -163,6 +164,7 @@ class BlogService {
           comment_id: comm_va['comment_id'],
         }),
       })
+      comm_va['create_time'] = relativeTime(comm_va['create_time'])
       const rep_res = comm_va['reps']
 
       for (let rep_idx = 0; rep_idx < rep_res.length; rep_idx++) {
@@ -184,6 +186,8 @@ class BlogService {
           })
           rep_va['reply_char_content'] = t && t.char_content
         }
+
+        rep_va['create_time'] = relativeTime(rep_va['create_time'])
       }
     }
   }

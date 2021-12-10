@@ -3,9 +3,7 @@ const path = require('path')
 const Koa = require('koa')
 const KoaBody = require('koa-body')
 const KoaStatic = require('koa-static')
-const parameter = require('koa-parameter')
 
-const errHandler = require('./errHandler')
 const router = require('../router')
 const cors = require('koa2-cors')
 
@@ -26,14 +24,11 @@ app.use(
 )
 // 静态资源
 app.use(KoaStatic(path.join(__dirname, '../upload')))
-app.use(parameter(app))
+// app.use(parameter(app))
 
 // 跨域
 app.use(cors())
 // 路由
 app.use(router.routes()).use(router.allowedMethods())
-
-// 统一的错误处理
-app.on('error', errHandler)
 
 module.exports = app

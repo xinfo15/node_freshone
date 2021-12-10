@@ -1,7 +1,6 @@
 const Router = require('koa-router')
-const { getCategory, getBlog, getComm, getReply, getTopics, addComm, toggleUpvote, toggleColle, removeBlog, removeComm, removeReply, getTheBlog, uploadOneBlogMedia, addBlog, getReleaseBlogCate } = require('../controller/blog.controller')
+const { getCategory, getBlog, getComm, getReply, getTopics, addComm, toggleUpvote, toggleColle, removeBlog, removeComm, removeReply, getTheBlog, uploadOneBlogMedia, addBlog, getReleaseBlogCate, getCachedChunkList, uploadFileChunk, mergeFileChunks } = require('../controller/blog.controller')
 const { hasLogin, forceLogin } = require('../middleware/token.middleware')
-const { hasToken } = require('../util/token')
 
 const router = new Router({ prefix: '/index/home' })
 
@@ -20,5 +19,8 @@ router.post('/remove_reply/:name/:val', forceLogin, removeReply)
 router.post('/get_the_blog/:name/:val', hasLogin, getTheBlog)
 router.post('/upload_one_blog_media', forceLogin, uploadOneBlogMedia)
 router.post('/add_blog', forceLogin, addBlog)
+router.get('/get_cached_chunk_list', forceLogin, getCachedChunkList)
+router.post('/upload_file_chunk', forceLogin, uploadFileChunk)
+router.post('/merge_file_chunks', forceLogin, mergeFileChunks)
 
 module.exports = router

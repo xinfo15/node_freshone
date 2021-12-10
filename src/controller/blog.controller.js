@@ -19,11 +19,10 @@ const TopicSelection = require('../model/topic_selection.model')
 const { findOneUser } = require('../service/user.service')
 const { findAllBlog, handleBlogRes, handleCommRes } = require('../service/blog.service')
 const { BLOG_LIMIT, BLOG_TYPE, ARTICLE_TYPE } = require('../config/config.runtime')
-const { ACCESS_KEY_ID, ACCESS_KEY_SECERT, REGION, BUCKET, MY_DOMAIN } = require('../config/config.default')
-const OSS = require('ali-oss')
+const { MY_DOMAIN } = require('../config/config.default')
 const path = require('path')
 const { literal } = require('sequelize')
-const { resolve } = require('path')
+const fs = require('fs')
 
 class BlogController {
   async getCategory(ctx, next, type = BLOG_TYPE) {
@@ -484,6 +483,7 @@ class BlogController {
   }
 
   async uploadOneBlogMedia(ctx, next) {
+    //#region
     // let client = new OSS({
     //   // yourRegion填写Bucket所在地域。以华东1（杭州）为例，Region填写为oss-cn-hangzhou。
     //   region: REGION,
@@ -501,6 +501,7 @@ class BlogController {
     // } catch (e) {
     //   console.log(e)
     // }
+    //#endregion
     try {
       const { pos } = ctx.request.body
 
@@ -610,6 +611,91 @@ class BlogController {
       console.log(err)
       ctx.body = error(COMMEN_ERROR, '发布博客失败' + err)
     }
+  }
+
+  // 大文件上传api
+  // 获取上传过的chunk列表
+  async getCachedChunkList(ctx, next) {
+    const hash = ctx.query.hash
+    const dir = path.resolve(__dirname, '../upload', hash)
+    let ans
+    if (fs.existsSync(dir)) {
+      ans = { dirs: fs.readdirSync(dir) }
+    } else {
+      ans = {}
+    }
+
+    // res.send(JSON.stringify(ans))
+    ctx.body = success(ans)
+  }
+  // 上传chunk
+  async uploadFileChunk(ctx, next) {
+    const { idx, hash } = ctx.request.body
+    const chunk = ctx.request.files.chunk
+
+    if (!chunk || !idx || !hash) return (ctx.body = error(MISSING_PARAM, 'chunk & idx & hash'))
+
+    const dir = path.resolve(__dirname, '../upload', hash)
+    const filename = hash + '_' + idx
+
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir)
+    }
+
+    fs.renameSync(chunk.path, path.resolve(dir, filename))
+
+    ctx.body = success([])
+  }
+  // 合并chunk到文件中
+  async mergeFileChunks(ctx, next) {
+    const { hash, ext, chunkSize, type, pos } = ctx.request.body
+    const chunkDir = path.resolve(__dirname, '../upload', hash)
+    if (!chunkDir || !ext || !chunkSize || !type) return (ctx.body = error(MISSING_PARAM, '缺少参数 chunkDir & ext & chunkSize & type'))
+    const filename = hash + ext
+    const fileDir = path.resolve(__dirname, '../upload', filename)
+
+    const pipeStream = (path, writeStream) =>
+      new Promise((resolve) => {
+        const readStream = fs.createReadStream(path)
+        readStream.on('end', () => {
+          // fs.unlinkSync(path)
+          resolve()
+        })
+        readStream.pipe(writeStream)
+      })
+
+    if (fs.existsSync(chunkDir)) {
+      let chunkPaths = fs.readdirSync(chunkDir)
+      chunkPaths.sort((a, b) => parseInt(a.split('_')[1]) - parseInt(b.split('_')[1]))
+
+      try {
+        await Promise.all(
+          chunkPaths.map((chunkPath, idx) =>
+            pipeStream(
+              `${chunkDir}/${chunkPath}`,
+              fs.createWriteStream(fileDir, {
+                start: idx * chunkSize,
+                end: (idx + 1) * chunkSize,
+              })
+            )
+          )
+        )
+      } catch (err) {
+        console.log(err)
+      }
+
+      // 删除文件和目录
+      chunkPaths.forEach((chunkPath, idx) => {
+        fs.unlinkSync(path.resolve(__dirname, chunkDir, chunkPath))
+      })
+      fs.rmdirSync(chunkDir)
+    }
+
+    ctx.body = success({
+      url: MY_DOMAIN + filename,
+      type,
+      pos,
+    })
   }
 }
 const self = new BlogController()
